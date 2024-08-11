@@ -1,0 +1,19 @@
+{
+  "name": "slack-notification-github",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@dotenvx/dotenvx": "^1.7.0",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@octokit/app": "^15.1.0",
+    "hono": "^4.5.4"
+  },
+  "scripts": {
+    "dev": "dotenvx run -f .env.dev -- bun run index.ts"
+  }
+}
