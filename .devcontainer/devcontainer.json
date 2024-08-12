@@ -8,7 +8,8 @@
 				"oderwat.indent-rainbow",
 				"yoshi389111.visible-whitespace",
 				"ms-azuretools.vscode-docker",
-				"EditorConfig.EditorConfig"
+				"EditorConfig.EditorConfig",
+				"qwtel.sqlite-viewer"
 			],
 			"settings": {
 				"[json]": {

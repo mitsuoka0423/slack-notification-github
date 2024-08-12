@@ -60,7 +60,7 @@ octokitApp.webhooks.on('pull_request.opened', async ({ octokit, payload }) => {
 
 - PR
   - タイトル: ${payload.pull_request.title}
-  - URL: ${payload.pull_request.url}
+  - URL: ${payload.pull_request.html_url}
 - 初回レビュー希望日: 
 - 依頼者: @{アサイニー}
 `,
@@ -70,9 +70,10 @@ octokitApp.webhooks.on('pull_request.opened', async ({ octokit, payload }) => {
 		const { ts, channel } = response;
 		console.debug({ ts, channel });
 
-		const { id } = payload.pull_request;
-
-		set(String(id), JSON.stringify({ ts, channel }));
+		const { number } = payload.pull_request;
+		const repository = payload.pull_request.head.repo?.name;
+		const key = `${repository}-${number}`;
+		set(key, JSON.stringify({ ts, channel }));
 	}
 });
 
@@ -84,14 +85,16 @@ octokitApp.webhooks.on(
 		);
 		console.log(JSON.stringify(payload, null, 2));
 
-		const { id } = payload.pull_request;
+		const { number } = payload.pull_request;
+		const repository = payload.pull_request.head.repo?.name;
+		const key = `${repository}-${number}`;
 
-		const threadInfo = get<ThreadInfo>(String(id));
-		console.log({ ts: threadInfo.ts, channel: threadInfo.channel });
+		const {ts, channel} = get<ThreadInfo>(key);
+		console.log({ ts, channel });
 
-		await slackApp.client.chat.postMessage({
-			// TODO: .envに移動
-			channel: process.env.SLACK_API_TARGET_CHANNEL || '',
+		await slackApp.client.conversations.replies({
+			channel,
+			ts,
 			// TODO: ユーザーごとに出し分け
 			text: `
 <@U07GUPMT4E5> <@レビュアー>

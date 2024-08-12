@@ -1,13 +1,10 @@
-import {
-	type LocalStoragePonyfill,
-	createLocalStorage,
-} from 'localstorage-ponyfill';
+import { createLocalStorage } from 'bun-storage';
 
-let localStorage: LocalStoragePonyfill | null;
+let localStorage: Storage | null;
 
 const init = () => {
 	if (!localStorage) {
-		localStorage = createLocalStorage();
+		localStorage = createLocalStorage('./.cache/db.sqlite');
 	}
 };
 
@@ -16,7 +13,12 @@ const set = <T>(key: string, object: T) => {
 		throw new Error('localStorageを初期化してください');
 	}
 
-	localStorage.setItem(key, JSON.stringify(object));
+	const encodedKey = encode(key);
+
+	localStorage.setItem(encodedKey, JSON.stringify(object));
+
+	const item = localStorage.getItem(encodedKey) as T;
+	console.debug({ encodedKey, item });
 };
 
 const get = <T>(key: string): T => {
@@ -24,13 +26,29 @@ const get = <T>(key: string): T => {
 		throw new Error('localStorageを初期化してください');
 	}
 
-	const item = localStorage.getItem(key);
+	console.debug({ key });
+
+	const encodedKey = encode(key);
+
+	console.debug({ encodedKey });
+
+	const item = localStorage.getItem(encodedKey);
+
+	console.debug({ item });
 
 	if (!item) {
 		throw new Error(`指定されたキーに紐づくデータが存在しません(key: ${key})`);
 	}
 
-	return JSON.parse(item) as T;
+	const parsedItem = JSON.parse(JSON.parse(item));
+
+	console.debug({ parsedItem });
+
+	return parsedItem;
+};
+
+const encode = (plainText: string): string => {
+	return encodeURIComponent(plainText);
 };
 
 export { init, set, get };
