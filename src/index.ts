@@ -1,16 +1,20 @@
+import { config } from 'dotenv';
 import fs from 'node:fs';
 import http from 'node:http';
-import { App } from '@octokit/app';
+import { App as OctokitApp } from '@octokit/app';
+import { App as SlackApp } from '@slack/bolt';
 import { createNodeMiddleware } from '@octokit/webhooks';
 
-const appId = process.env.APP_ID || '';
-const privateKeyPath = process.env.PRIVATE_KEY_PATH || '';
+config({ path: '.env.dev' });
+
+const appId = process.env.GITHUB_APP_ID || '';
+const privateKeyPath = process.env.GITHUB_APP_PRIVATE_KEY_PATH || '';
 const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
-const secret = process.env.WEBHOOK_SECRET || '';
+const secret = process.env.GITHUB_APP_WEBHOOK_SECRET || '';
 // NOTE: GHESを利用する場合は設定する
 // const enterpriseHostname = process.env.ENTERPRISE_HOSTNAME;
 
-const app = new App({
+const octokitApp = new OctokitApp({
 	appId,
 	privateKey,
 	webhooks: {
@@ -24,11 +28,16 @@ const app = new App({
 	// }),
 });
 
-const { data } = await app.octokit.request('/app');
+const slackApp = new SlackApp({
+	token: process.env.SLACK_API_BOT_TOKEN || '',
+	signingSecret: process.env.SLACK_API_SIGNING_SECRET || '',
+});
 
-app.octokit.log.debug(`Authenticated as '${data.name}'`);
+const { data } = await octokitApp.octokit.request('/app');
 
-app.webhooks.on('pull_request.opened', async ({ octokit, payload }) => {
+octokitApp.octokit.log.debug(`Authenticated as '${data.name}'`);
+
+octokitApp.webhooks.on('pull_request.opened', async ({ octokit, payload }) => {
 	console.log(
 		`Received a pull request event for #${payload.pull_request.number}`,
 	);
@@ -51,7 +60,7 @@ app.webhooks.on('pull_request.opened', async ({ octokit, payload }) => {
 	// }
 });
 
-app.webhooks.onError((error) => {
+octokitApp.webhooks.onError((error) => {
 	if (error.name === 'AggregateError') {
 		console.log(`Error processing request: ${error.event}`);
 	} else {
@@ -63,7 +72,7 @@ const port = process.env.PORT || 3000;
 const path = '/api/webhook';
 const localWebhookUrl = `http://localhost:${port}${path}`;
 
-const middleware = createNodeMiddleware(app.webhooks, { path });
+const middleware = createNodeMiddleware(octokitApp.webhooks, { path });
 
 http.createServer(middleware).listen(port, () => {
 	console.log(`Server is listening for events at: ${localWebhookUrl}`);

@@ -1,21 +1,23 @@
 {
   "name": "slack-notification-github",
-  "module": "index.ts",
+  "module": "src/index.ts",
   "type": "module",
   "devDependencies": {
     "@biomejs/biome": "^1.8.3",
     "@dotenvx/dotenvx": "^1.7.0",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "dotenv": "^16.4.5"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "dependencies": {
     "@octokit/app": "^15.1.0",
+    "@slack/bolt": "^3.19.0",
     "hono": "^4.5.4"
   },
   "scripts": {
-    "dev": "dotenvx run -f .env.dev -- bun --hot run index.ts",
+    "dev": "bun run --hot ./src/index.ts",
     "format": "biome format --write ./*.ts"
   }
 }
