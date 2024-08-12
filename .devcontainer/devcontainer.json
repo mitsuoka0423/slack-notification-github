@@ -1,0 +1,42 @@
+{
+	"name": "Docker in docker",
+	"image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"biomejs.biome",
+				"oderwat.indent-rainbow",
+				"yoshi389111.visible-whitespace",
+				"ms-azuretools.vscode-docker"
+			],
+			"settings": {
+				"[json]": {
+					"editor.defaultFormatter": "biomejs.biome",
+					"editor.quickSuggestions": {
+						"strings": true
+					},
+					"editor.suggest.insertMode": "replace"
+				},
+				"editor.defaultFormatter": "biomejs.biome",
+				"editor.codeActionsOnSave": {
+					"quickfix.biome": "explicit",
+					"source.organizeImports.biome": "explicit"
+				},
+				"visibleWhitespace.htab.enable": true,
+				"visibleWhitespace.space.enable": true
+			}
+		}
+	},
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
+	},
+	"portsAttributes": {
+		"443": {
+			"label": "HTTPS"
+		}
+	},
+	"forwardPorts": [
+		"3000:3000"
+	],
+	"postCreateCommand": "docker-compose build && docker-compose up -d"
+}
