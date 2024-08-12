@@ -14,7 +14,8 @@
   "dependencies": {
     "@octokit/app": "^15.1.0",
     "@slack/bolt": "^3.19.0",
-    "hono": "^4.5.4"
+    "hono": "^4.5.4",
+    "localstorage-ponyfill": "^1.0.2"
   },
   "scripts": {
     "dev": "bun run --hot ./src/index.ts",
