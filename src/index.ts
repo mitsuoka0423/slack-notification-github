@@ -97,8 +97,7 @@ octokitApp.webhooks.on(
 			thread_ts: ts, // NOTE: スレッドに返信する
 			// TODO: ユーザーごとに出し分け
 			text: `
-<@U07GUPMT4E5> <@レビュアー>
-:memo: PRが再オープンされました
+:memo: 再オープンされました
 ${payload.pull_request.html_url}
 `,
 		});
@@ -106,7 +105,7 @@ ${payload.pull_request.html_url}
 		if (response.ok) {
 			const { ts, channel } = response;
 			console.debug({ ts, channel });
-	
+
 			const { number } = payload.pull_request;
 			const repository = payload.pull_request.head.repo?.name;
 			const key = `${repository}-${number}`;
@@ -115,79 +114,90 @@ ${payload.pull_request.html_url}
 	},
 );
 
-octokitApp.webhooks.on(
-	'pull_request.closed',
-	async ({ octokit, payload }) => {
-		console.log(
-			`Received a pull request event for #${payload.pull_request.number}`,
-		);
-		console.log(JSON.stringify(payload, null, 2));
+octokitApp.webhooks.on('pull_request.closed', async ({ octokit, payload }) => {
+	console.log(
+		`Received a pull request event for #${payload.pull_request.number}`,
+	);
+	console.log(JSON.stringify(payload, null, 2));
+
+	const { number } = payload.pull_request;
+	const repository = payload.pull_request.head.repo?.name;
+	const key = `${repository}-${number}`;
+
+	const { ts, channel } = get<ThreadInfo>(key);
+	console.log({ ts, channel });
+
+	let text: string;
+	if (payload.pull_request.merged) {
+		text= `
+:memo: マージされました！
+		`;
+	} else {
+		text= `
+:memo: クローズされました
+		`;
+	}
+
+	const response = await slackApp.client.chat.postMessage({
+		channel,
+		thread_ts: ts, // NOTE: スレッドに返信する
+		// TODO: ユーザーごとに出し分け
+		text,
+	});
+
+	if (response.ok) {
+		const { ts, channel } = response;
+		console.debug({ ts, channel });
 
 		const { number } = payload.pull_request;
 		const repository = payload.pull_request.head.repo?.name;
 		const key = `${repository}-${number}`;
+		set(key, JSON.stringify({ ts, channel }));
+	}
+});
 
-		const { ts, channel } = get<ThreadInfo>(key);
-		console.log({ ts, channel });
+octokitApp.webhooks.on('pull_request_review', async ({ octokit, payload }) => {
+	console.log(
+		`Received a pull request event for #${payload.pull_request.number}`,
+	);
+	console.log(JSON.stringify(payload, null, 2));
 
-		const response = await slackApp.client.chat.postMessage({
-			channel,
-			thread_ts: ts, // NOTE: スレッドに返信する
-			// TODO: ユーザーごとに出し分け
-			text: `
-:memo: PRがクローズされました
-${payload.pull_request.html_url}
-`,
-		});
+	const { number } = payload.pull_request;
+	const repository = payload.pull_request.head.repo?.name;
+	const key = `${repository}-${number}`;
 
-		if (response.ok) {
-			const { ts, channel } = response;
-			console.debug({ ts, channel });
-	
-			const { number } = payload.pull_request;
-			const repository = payload.pull_request.head.repo?.name;
-			const key = `${repository}-${number}`;
-			set(key, JSON.stringify({ ts, channel }));
-		}
-	},
-);
+	const { ts, channel } = get<ThreadInfo>(key);
+	console.log({ ts, channel });
 
-octokitApp.webhooks.on(
-	'pull_request_review',
-	async ({ octokit, payload }) => {
-		console.log(
-			`Received a pull request event for #${payload.pull_request.number}`,
-		);
-		console.log(JSON.stringify(payload, null, 2));
+	let text: string;
+	if (payload.review.state === 'approved') {
+		text = ':memo: PRが承認されました！';
+	} else {
+		text = `
+:memo: レビューコメントが追加されました
+
+${payload.review.body}
+${payload.review._links.html.href}
+`;
+	}
+
+	const response = await slackApp.client.chat.postMessage({
+		channel,
+		thread_ts: ts, // NOTE: スレッドに返信する
+		// TODO: ユーザーごとに出し分け
+		text,
+	});
+
+	if (response.ok) {
+		const { ts, channel } = response;
+		console.debug({ ts, channel });
 
 		const { number } = payload.pull_request;
 		const repository = payload.pull_request.head.repo?.name;
 		const key = `${repository}-${number}`;
-
-		const { ts, channel } = get<ThreadInfo>(key);
-		console.log({ ts, channel });
-
-		const response = await slackApp.client.chat.postMessage({
-			channel,
-			thread_ts: ts, // NOTE: スレッドに返信する
-			// TODO: ユーザーごとに出し分け
-			text: `
-:memo: PRが承認されました
-${payload.pull_request.html_url}
-`,
-		});
-
-		if (response.ok) {
-			const { ts, channel } = response;
-			console.debug({ ts, channel });
-	
-			const { number } = payload.pull_request;
-			const repository = payload.pull_request.head.repo?.name;
-			const key = `${repository}-${number}`;
-			set(key, JSON.stringify({ ts, channel }));
-		}
-	},
-);
+		set(key, JSON.stringify({ ts, channel }));
+	}
+});
 
 octokitApp.webhooks.onError((error) => {
 	if (error.name === 'AggregateError') {
