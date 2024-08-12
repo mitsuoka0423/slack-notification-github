@@ -7,7 +7,8 @@
 				"biomejs.biome",
 				"oderwat.indent-rainbow",
 				"yoshi389111.visible-whitespace",
-				"ms-azuretools.vscode-docker"
+				"ms-azuretools.vscode-docker",
+				"EditorConfig.EditorConfig"
 			],
 			"settings": {
 				"[json]": {
@@ -38,5 +39,5 @@
 	"forwardPorts": [
 		"3000:3000"
 	],
-	"postCreateCommand": "docker-compose build && docker-compose up -d"
+	"postCreateCommand": "docker-compose build && docker-compose up -d && npm i -g bun"
 }
