@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@octokit/app": "^15.1.0",
+    "@octokit/rest": "^21.0.1",
     "@slack/bolt": "^3.19.0",
+    "aws-lambda": "^1.0.7",
     "bun-storage": "^0.1.4",
     "hono": "^4.5.4"
   },
