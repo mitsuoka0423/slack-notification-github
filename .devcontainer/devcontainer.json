@@ -40,5 +40,5 @@
 	"forwardPorts": [
 		"3000:3000"
 	],
-	"postCreateCommand": "docker-compose build && docker-compose up -d && npm i -g bun"
+	"postCreateCommand": "npm i -g bun"
 }
