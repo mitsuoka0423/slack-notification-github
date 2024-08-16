@@ -6,7 +6,8 @@
     "@biomejs/biome": "^1.8.3",
     "@dotenvx/dotenvx": "^1.7.0",
     "@types/bun": "latest",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "esbuild": "^0.23.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
@@ -20,6 +21,7 @@
     "hono": "^4.5.4"
   },
   "scripts": {
+		"build": "esbuild ./src/indexLambda.ts --bundle  --platform=node --outfile=./dist/indexLambda.js",
     "dev": "bun run --hot ./src/index.ts",
     "format": "biome format --write ./*.ts"
   }

@@ -176,3 +176,4 @@ dist
 
 .env.keys
 *.pem
+dist

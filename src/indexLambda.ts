@@ -1,36 +1,42 @@
 import fs from 'node:fs';
 import type { APIGatewayProxyHandler } from 'aws-lambda';
-import { App } from '@octokit/app';
-import { Octokit } from '@octokit/rest';
+import { App as OctokitApp } from '@octokit/app';
+import { App as SlackApp } from '@slack/bolt';
 
 const appId = process.env.GITHUB_APP_ID || '';
 const privateKeyPath = process.env.GITHUB_APP_PRIVATE_KEY_PATH || '';
 const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+const secret = process.env.GITHUB_APP_WEBHOOK_SECRET || '';
 
 // GitHub Appの設定
-const app = new App({
+const app = new OctokitApp({
 	appId,
 	privateKey,
+	webhooks: {
+		secret,
+	},
+});
+
+const slackApp = new SlackApp({
+	token: process.env.SLACK_API_BOT_TOKEN || '',
+	signingSecret: process.env.SLACK_API_SIGNING_SECRET || '',
 });
 
 export const handler: APIGatewayProxyHandler = async (event) => {
+	console.debug(JSON.stringify(event, null, 2));
+
 	try {
 		const payload = JSON.parse(event.body || '{}');
-		const githubEvent = event.headers['X-GitHub-Event'];
+		console.debug(JSON.stringify(payload, null, 2));
 
-		if (githubEvent === 'issues' && payload.action === 'opened') {
-			const installationId = payload.installation.id;
-			const repo = payload.repository.name;
-			const owner = payload.repository.owner.login;
-			const issueNumber = payload.issue.number;
+		const response = await slackApp.client.chat.postMessage({
+			channel: process.env.SLACK_API_TARGET_CHANNEL || '',
+			text: `
+Webhookイベントを受信しました
 
-			console.log({ installationId, repo, owner, issueNumber });
-
-			return {
-				statusCode: 200,
-				body: JSON.stringify({ message: 'Comment added successfully' }),
-			};
-		}
+${JSON.stringify(payload, null, 2)}
+	`,
+		});
 
 		return {
 			statusCode: 200,
