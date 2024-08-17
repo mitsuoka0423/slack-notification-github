@@ -4,7 +4,7 @@ import { App as OctokitApp } from '@octokit/app';
 import { createNodeMiddleware } from '@octokit/webhooks';
 import { App as SlackApp } from '@slack/bolt';
 import { config } from 'dotenv';
-import { init, set, get } from './kvs';
+import { get, init, set } from './kvs';
 
 type ThreadInfo = {
 	ts: string;
@@ -51,8 +51,7 @@ octokitApp.webhooks.on('pull_request.opened', async ({ octokit, payload }) => {
 	);
 	console.log(JSON.stringify(payload, null, 2));
 	const response = await slackApp.client.chat.postMessage({
-		// TODO: .envに移動
-		channel: process.env.SLACK_API_TARGET_CHANNEL || '',
+		channel: process.env.SLACK_API_REVIEW_CHANNEL || '',
 		// TODO: ユーザーごとに出し分け
 		text: `
 <@U07GUPMT4E5> <@レビュアー>
