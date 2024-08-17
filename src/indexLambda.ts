@@ -30,7 +30,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 		console.debug(JSON.stringify(payload, null, 2));
 
 		const response = await slackApp.client.chat.postMessage({
-			channel: process.env.SLACK_API_TARGET_CHANNEL || '',
+			channel: process.env.SLACK_API_DEBUG_CHANNEL || '',
 			text: `
 Webhookイベントを受信しました
 
