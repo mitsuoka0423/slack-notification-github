@@ -11,7 +11,8 @@
 				"EditorConfig.EditorConfig",
 				"qwtel.sqlite-viewer",
 				"usernamehw.errorlens",
-				"YoavBls.pretty-ts-errors"
+				"YoavBls.pretty-ts-errors",
+				"bierner.markdown-mermaid"
 			],
 			"settings": {
 				"[json]": {
@@ -42,5 +43,5 @@
 	"forwardPorts": [
 		"3000:3000"
 	],
-	"postCreateCommand": "npm i -g bun"
+	"postCreateCommand": "npm i -g bun &&  npm install -g aws-cdk"
 }
