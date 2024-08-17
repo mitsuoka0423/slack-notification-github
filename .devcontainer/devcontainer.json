@@ -9,7 +9,9 @@
 				"yoshi389111.visible-whitespace",
 				"ms-azuretools.vscode-docker",
 				"EditorConfig.EditorConfig",
-				"qwtel.sqlite-viewer"
+				"qwtel.sqlite-viewer",
+				"usernamehw.errorlens",
+				"YoavBls.pretty-ts-errors"
 			],
 			"settings": {
 				"[json]": {
