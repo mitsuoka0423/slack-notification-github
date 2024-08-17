@@ -29,18 +29,27 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 		const payload = JSON.parse(event.body || '{}');
 		console.debug(JSON.stringify(payload, null, 2));
 
-		const response = await slackApp.client.chat.postMessage({
-			channel: process.env.SLACK_API_REVIEW_CHANNEL || '',
-			text: `
+		// FIXME: 誰か型を当ててくれ
+		if (payload.action === 'opened') {
+			const response = await slackApp.client.chat.postMessage({
+				channel: process.env.SLACK_API_REVIEW_CHANNEL || '',
+				text: `
 @{メンション}
 レビューお願いします！
-	`,
-		});
 
+・URL: ${payload.pull_request.html_url}
+		`,
+			});
+		}
+
+		const prNumer = payload.number;
+		// デバッグ用
 		await slackApp.client.chat.postMessage({
 			channel: process.env.SLACK_API_DEBUG_CHANNEL || '',
 			text: `
 Webhookイベントを受信しました
+
+PR #${prNumer}
 
 ${JSON.stringify(payload, null, 2)}
 	`,
