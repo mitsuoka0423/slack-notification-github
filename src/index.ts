@@ -5,9 +5,10 @@ import {
 	postToDebugChannel,
 	postToReviewChannel,
 } from './api/slackApp';
-import { init as initReviewTable, set } from './db/reviewTable';
+import { init as initReviewTable } from './db/reviewTable';
 import { ENV } from './env';
-import { handle } from './handler/pullRequest/opened';
+import { handle as handlePullRequestOpened } from './handler/pullRequest/opened';
+import { handle as handlePullRequestClosed } from './handler/pullRequest/closed';
 
 const secret = ENV.GITHUB_APP_WEBHOOK_SECRET;
 const reviewChannel = ENV.SLACK_API_REVIEW_CHANNEL;
@@ -55,7 +56,8 @@ ${JSON.stringify(JSON.parse(event.body || '{}'), null, 2)}
 			};
 		}
 
-		octokitWebhooks.on('pull_request.opened', handle);
+		octokitWebhooks.on('pull_request.opened', handlePullRequestOpened);
+		octokitWebhooks.on('pull_request.closed', handlePullRequestClosed);
 
 		const id = xGitHubDelivery;
 		// FIXME: 誰か型を当ててくれ
