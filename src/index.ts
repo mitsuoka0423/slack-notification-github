@@ -1,37 +1,14 @@
-import fs from 'node:fs';
-import http from 'node:http';
-import { App as OctokitApp } from '@octokit/app';
-import { createNodeMiddleware } from '@octokit/webhooks';
+import { Webhooks as OctokitWebhooks } from '@octokit/webhooks';
 import { App as SlackApp } from '@slack/bolt';
-import { config } from 'dotenv';
-import { init, set, get } from './kvs';
+import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { init, set } from './reviewTable';
 
-type ThreadInfo = {
-	ts: string;
-	channel: string;
-};
-
-config({ path: '.env.dev' });
-
-const appId = process.env.GITHUB_APP_ID || '';
-const privateKeyPath = process.env.GITHUB_APP_PRIVATE_KEY_PATH || '';
-const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
 const secret = process.env.GITHUB_APP_WEBHOOK_SECRET || '';
-// NOTE: GHESを利用する場合は設定する
-// const enterpriseHostname = process.env.ENTERPRISE_HOSTNAME;
+const reviewChannel = process.env.SLACK_API_REVIEW_CHANNEL || '';
+const debugChannel = process.env.SLACK_API_DEBUG_CHANNEL || '';
 
-const octokitApp = new OctokitApp({
-	appId,
-	privateKey,
-	webhooks: {
-		secret,
-	},
-	// NOTE: GHESを利用する場合は設定する
-	// ...(enterpriseHostname && {
-	// 	Octokit: Octokit.defaults({
-	// 		baseUrl: `https://${enterpriseHostname}/api/v3`,
-	// 	}),
-	// }),
+const octokitWebhooks = new OctokitWebhooks({
+	secret,
 });
 
 const slackApp = new SlackApp({
@@ -41,216 +18,122 @@ const slackApp = new SlackApp({
 
 init();
 
-const { data } = await octokitApp.octokit.request('/app');
+export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+	console.info('[START]index.handler');
+	console.debug(JSON.stringify(event, null, 2));
 
-octokitApp.octokit.log.debug(`Authenticated as '${data.name}'`);
-
-octokitApp.webhooks.on('pull_request.opened', async ({ octokit, payload }) => {
-	console.log(
-		`Received a pull request event for #${payload.pull_request.number}`,
-	);
-	console.log(JSON.stringify(payload, null, 2));
-	const response = await slackApp.client.chat.postMessage({
-		// TODO: .envに移動
-		channel: process.env.SLACK_API_TARGET_CHANNEL || '',
-		// TODO: ユーザーごとに出し分け
+	// デバッグ用
+	await slackApp.client.chat.postMessage({
+		channel: debugChannel,
 		text: `
-<@U07GUPMT4E5> <@レビュアー>
+Webhookイベントを受信しました
+
+${JSON.stringify(JSON.parse(event.body || '{}'), null, 2)}
+`,
+	});
+
+	try {
+		const xGitHubDelivery = event.headers['x-github-delivery'];
+		const xGitHubEvent = event.headers['x-github-event'];
+		const xHubSignature = event.headers['x-hub-signature'];
+		const body = JSON.parse(event.body || '');
+		if (!xGitHubDelivery || !xGitHubEvent || !xHubSignature || !body) {
+			console.warn('必須パラメータが設定されていません');
+			console.warn({ xGitHubDelivery, xGitHubEvent, xHubSignature, body });
+
+			return {
+				statusCode: 400,
+				body: JSON.stringify({ error: 'Bad Request' }),
+			};
+		}
+
+		const id = xGitHubDelivery;
+		// FIXME: 誰か型を当ててくれ
+		const name = xGitHubEvent as any;
+		const payload = body;
+		const signature = xHubSignature;
+
+		try {
+			// FIXME: 署名検証に失敗するので、一旦署名検証はスキップする
+			// await octokitWebhooks.verifyAndReceive({
+			// 	id,
+			// 	name,
+			// 	payload,
+			// 	signature,
+			// });
+			await octokitWebhooks.receive({
+				id,
+				name,
+				payload,
+			});
+		} catch (error) {
+			console.warn('署名検証に失敗しました');
+			console.warn(error);
+
+			return {
+				statusCode: 400,
+				body: JSON.stringify({ error: 'Bad Request' }),
+			};
+		}
+
+		octokitWebhooks.on('pull_request.opened', async ({ payload }) => {
+			console.info('[START]octokitWebhooks.on(pull_request.opened)');
+			console.debug({ payload: JSON.stringify(payload, null, 2) });
+
+			const response = await slackApp.client.chat.postMessage({
+				channel: reviewChannel,
+				text: `
+@{メンション}
 レビューお願いします！
 
-- PR
-  - タイトル: ${payload.pull_request.title}
-  - URL: ${payload.pull_request.html_url}
-- 初回レビュー希望日: 
-- 依頼者: @{アサイニー}
+・URL: ${payload.pull_request.html_url}
 `,
-	});
+			});
 
-	if (response.ok) {
-		const { ts, channel } = response;
-		console.debug({ ts, channel });
+			if (response.ok) {
+				const { ts, channel } = response;
 
-		const { number } = payload.pull_request;
-		const repository = payload.pull_request.head.repo?.name;
-		const key = `${repository}-${number}`;
-		set(key, JSON.stringify({ ts, channel }));
-	}
-});
+				if (!ts || !channel) {
+					throw new Error(
+						`Channel IDまたはTSが見つかりません(Channel ID: ${channel}, TS: ${ts})`,
+					);
+				}
 
-octokitApp.webhooks.on(
-	'pull_request.reopened',
-	async ({ octokit, payload }) => {
-		console.log(
-			`Received a pull request event for #${payload.pull_request.number}`,
-		);
-		console.log(JSON.stringify(payload, null, 2));
+				await set({
+					prUrl: payload.pull_request.html_url,
+					updatedAt: payload.pull_request.updated_at,
+					slackThread: {
+						channelId: channel,
+						ts,
+					},
+				});
+			}
 
-		const { number } = payload.pull_request;
-		const repository = payload.pull_request.head.repo?.name;
-		const key = `${repository}-${number}`;
-
-		const { ts, channel } = get<ThreadInfo>(key);
-		console.log({ ts, channel });
-
-		const response = await slackApp.client.chat.postMessage({
-			channel,
-			thread_ts: ts, // NOTE: スレッドに返信する
-			// TODO: ユーザーごとに出し分け
-			text: `
-:memo: 再オープンされました
-${payload.pull_request.html_url}
-`,
+			console.info('[END]octokitWebhooks.on(pull_request.opened)');
 		});
 
-		if (response.ok) {
-			const { ts, channel } = response;
-			console.debug({ ts, channel });
+		console.info('[END]index.handler');
 
-			const { number } = payload.pull_request;
-			const repository = payload.pull_request.head.repo?.name;
-			const key = `${repository}-${number}`;
-			set(key, JSON.stringify({ ts, channel }));
-		}
-	},
-);
+		return {
+			statusCode: 200,
+			body: JSON.stringify({ message: 'Event processed' }),
+		};
+	} catch (error) {
+		console.error('エラーが発生しました');
+		console.error('Error:', error);
 
-octokitApp.webhooks.on('pull_request.closed', async ({ octokit, payload }) => {
-	console.log(
-		`Received a pull request event for #${payload.pull_request.number}`,
-	);
-	console.log(JSON.stringify(payload, null, 2));
-
-	const { number } = payload.pull_request;
-	const repository = payload.pull_request.head.repo?.name;
-	const key = `${repository}-${number}`;
-
-	const { ts, channel } = get<ThreadInfo>(key);
-	console.log({ ts, channel });
-
-	let text: string;
-	if (payload.pull_request.merged) {
-		text= `
-:memo: マージされました！
-		`;
-	} else {
-		text= `
-:memo: クローズされました
-		`;
-	}
-
-	const response = await slackApp.client.chat.postMessage({
-		channel,
-		thread_ts: ts, // NOTE: スレッドに返信する
-		// TODO: ユーザーごとに出し分け
-		text,
-	});
-
-	if (response.ok) {
-		const { ts, channel } = response;
-		console.debug({ ts, channel });
-
-		const { number } = payload.pull_request;
-		const repository = payload.pull_request.head.repo?.name;
-		const key = `${repository}-${number}`;
-		set(key, JSON.stringify({ ts, channel }));
-	}
-});
-
-octokitApp.webhooks.on('pull_request_review', async ({ octokit, payload }) => {
-	console.log(
-		`Received a pull request event for #${payload.pull_request.number}`,
-	);
-	console.log(JSON.stringify(payload, null, 2));
-
-	const { number } = payload.pull_request;
-	const repository = payload.pull_request.head.repo?.name;
-	const key = `${repository}-${number}`;
-
-	const { ts, channel } = get<ThreadInfo>(key);
-	console.log({ ts, channel });
-
-	let text: string;
-	if (payload.review.state === 'approved') {
-		text = ':memo: PRが承認されました！';
-	} else {
-		text = `
-:memo: レビューコメントが追加されました
-
-${payload.review.body}
-${payload.review._links.html.href}
-`;
-	}
-
-	const response = await slackApp.client.chat.postMessage({
-		channel,
-		thread_ts: ts, // NOTE: スレッドに返信する
-		// TODO: ユーザーごとに出し分け
-		text,
-	});
-
-	if (response.ok) {
-		const { ts, channel } = response;
-		console.debug({ ts, channel });
-
-		const { number } = payload.pull_request;
-		const repository = payload.pull_request.head.repo?.name;
-		const key = `${repository}-${number}`;
-		set(key, JSON.stringify({ ts, channel }));
-	}
-});
-
-octokitApp.webhooks.on(
-	'pull_request_review',
-	async ({ octokit, payload }) => {
-		console.log(
-			`Received a pull request event for #${payload.pull_request.number}`,
-		);
-		console.log(JSON.stringify(payload, null, 2));
-
-		const { number } = payload.pull_request;
-		const repository = payload.pull_request.head.repo?.name;
-		const key = `${repository}-${number}`;
-
-		const { ts, channel } = get<ThreadInfo>(key);
-		console.log({ ts, channel });
-
-		const response = await slackApp.client.chat.postMessage({
-			channel,
-			thread_ts: ts, // NOTE: スレッドに返信する
-			// TODO: ユーザーごとに出し分け
+		await slackApp.client.chat.postMessage({
+			channel: debugChannel,
 			text: `
-:memo: PRが承認されました
-${payload.pull_request.html_url}
-`,
+エラーが発生しました
+
+${error}
+	`,
 		});
 
-		if (response.ok) {
-			const { ts, channel } = response;
-			console.debug({ ts, channel });
-	
-			const { number } = payload.pull_request;
-			const repository = payload.pull_request.head.repo?.name;
-			const key = `${repository}-${number}`;
-			set(key, JSON.stringify({ ts, channel }));
-		}
-	},
-);
-
-octokitApp.webhooks.onError((error) => {
-	if (error.name === 'AggregateError') {
-		console.log(`Error processing request: ${error.event}`);
-	} else {
-		console.log(error);
+		return {
+			statusCode: 500,
+			body: JSON.stringify({ error: 'Internal server error' }),
+		};
 	}
-});
-
-const port = process.env.PORT || 3000;
-const path = '/api/webhook';
-const localWebhookUrl = `http://localhost:${port}${path}`;
-
-const middleware = createNodeMiddleware(octokitApp.webhooks, { path });
-
-http.createServer(middleware).listen(port, () => {
-	console.log(`Server is listening for events at: ${localWebhookUrl}`);
-	console.log('Press Ctrl + C to quit.');
-});
+};

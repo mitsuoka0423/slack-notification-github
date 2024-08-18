@@ -10,7 +10,10 @@
 				"ms-azuretools.vscode-docker",
 				"EditorConfig.EditorConfig",
 				"qwtel.sqlite-viewer",
+				"usernamehw.errorlens",
+				"YoavBls.pretty-ts-errors",
 				"bierner.markdown-mermaid",
+				"wayou.vscode-todo-highlight",
 				"DavidAnson.vscode-markdownlint"
 			],
 			"settings": {
@@ -45,5 +48,5 @@
 	"forwardPorts": [
 		"3000:3000"
 	],
-	"postCreateCommand": "npm i -g bun"
+	"postCreateCommand": "npm i -g bun &&  npm install -g aws-cdk"
 }
