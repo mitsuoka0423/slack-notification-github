@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { SlackNotificationGitHubStack } from '../lib/cdk-stack';
+import { SlackNotificationGitHubStack } from '../lib/slack-notification-github-stack';
 
 const app = new cdk.App();
 new SlackNotificationGitHubStack(app, 'SlackNotificationGitHubStack', {

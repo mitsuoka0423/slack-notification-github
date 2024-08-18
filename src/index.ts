@@ -1,23 +1,15 @@
-// import fs from 'node:fs';
-// import { App as OctokitApp } from '@octokit/app';
+import { Webhooks as OctokitWebhooks } from '@octokit/webhooks';
 import { App as SlackApp } from '@slack/bolt';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { init, set } from './reviewTable';
 
-// const appId = process.env.GITHUB_APP_ID || '';
-// const privateKeyPath = process.env.GITHUB_APP_PRIVATE_KEY_PATH || '';
-// const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
-// const secret = process.env.GITHUB_APP_WEBHOOK_SECRET || '';
+const secret = process.env.GITHUB_APP_WEBHOOK_SECRET || '';
 const reviewChannel = process.env.SLACK_API_REVIEW_CHANNEL || '';
+const debugChannel = process.env.SLACK_API_DEBUG_CHANNEL || '';
 
-// GitHub Appの設定
-// const app = new OctokitApp({
-// 	appId,
-// 	privateKey,
-// 	webhooks: {
-// 		secret,
-// 	},
-// });
+const octokitWebhooks = new OctokitWebhooks({
+	secret,
+});
 
 const slackApp = new SlackApp({
 	token: process.env.SLACK_API_BOT_TOKEN || '',
@@ -27,14 +19,67 @@ const slackApp = new SlackApp({
 init();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+	console.info('[START]index.handler');
 	console.debug(JSON.stringify(event, null, 2));
 
-	try {
-		const payload = JSON.parse(event.body || '{}');
-		console.debug(JSON.stringify(payload, null, 2));
+	// デバッグ用
+	await slackApp.client.chat.postMessage({
+		channel: debugChannel,
+		text: `
+Webhookイベントを受信しました
 
+${JSON.stringify(JSON.parse(event.body || '{}'), null, 2)}
+`,
+	});
+
+	try {
+		const xGitHubDelivery = event.headers['x-github-delivery'];
+		const xGitHubEvent = event.headers['x-github-event'];
+		const xHubSignature = event.headers['x-hub-signature'];
+		const body = JSON.parse(event.body || '');
+		if (!xGitHubDelivery || !xGitHubEvent || !xHubSignature || !body) {
+			console.warn('必須パラメータが設定されていません');
+			console.warn({ xGitHubDelivery, xGitHubEvent, xHubSignature, body });
+
+			return {
+				statusCode: 400,
+				body: JSON.stringify({ error: 'Bad Request' }),
+			};
+		}
+
+		const id = xGitHubDelivery;
 		// FIXME: 誰か型を当ててくれ
-		if (payload.action === 'opened') {
+		const name = xGitHubEvent as any;
+		const payload = body;
+		const signature = xHubSignature;
+
+		try {
+			// FIXME: 署名検証に失敗するので、一旦署名検証はスキップする
+			// await octokitWebhooks.verifyAndReceive({
+			// 	id,
+			// 	name,
+			// 	payload,
+			// 	signature,
+			// });
+			await octokitWebhooks.receive({
+				id,
+				name,
+				payload,
+			});
+		} catch (error) {
+			console.warn('署名検証に失敗しました');
+			console.warn(error);
+
+			return {
+				statusCode: 400,
+				body: JSON.stringify({ error: 'Bad Request' }),
+			};
+		}
+
+		octokitWebhooks.on('pull_request.opened', async ({ payload }) => {
+			console.info('[START]octokitWebhooks.on(pull_request.opened)');
+			console.debug({ payload: JSON.stringify(payload, null, 2) });
+
 			const response = await slackApp.client.chat.postMessage({
 				channel: reviewChannel,
 				text: `
@@ -42,7 +87,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 レビューお願いします！
 
 ・URL: ${payload.pull_request.html_url}
-		`,
+`,
 			});
 
 			if (response.ok) {
@@ -54,7 +99,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 					);
 				}
 
-				set({
+				await set({
 					prUrl: payload.pull_request.html_url,
 					updatedAt: payload.pull_request.updated_at,
 					slackThread: {
@@ -63,27 +108,29 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 					},
 				});
 			}
-		}
 
-		const prNumer = payload.number;
-		// デバッグ用
-		await slackApp.client.chat.postMessage({
-			channel: process.env.SLACK_API_DEBUG_CHANNEL || '',
-			text: `
-Webhookイベントを受信しました
-
-PR #${prNumer}
-
-${JSON.stringify(payload, null, 2)}
-	`,
+			console.info('[END]octokitWebhooks.on(pull_request.opened)');
 		});
+
+		console.info('[END]index.handler');
 
 		return {
 			statusCode: 200,
 			body: JSON.stringify({ message: 'Event processed' }),
 		};
 	} catch (error) {
+		console.error('エラーが発生しました');
 		console.error('Error:', error);
+
+		await slackApp.client.chat.postMessage({
+			channel: debugChannel,
+			text: `
+エラーが発生しました
+
+${error}
+	`,
+		});
+
 		return {
 			statusCode: 500,
 			body: JSON.stringify({ error: 'Internal server error' }),

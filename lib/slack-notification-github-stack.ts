@@ -1,4 +1,4 @@
-import { Stack, type StackProps } from 'aws-cdk-lib';
+import { Duration, Stack, type StackProps } from 'aws-cdk-lib';
 import { Architecture, FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import type { Construct } from 'constructs';
@@ -12,6 +12,7 @@ export class SlackNotificationGitHubStack extends Stack {
 			entry: './src/index.ts',
 			handler: 'handler',
 			architecture: Architecture.ARM_64,
+			timeout: Duration.seconds(10),
 		});
 		const url = lambda.addFunctionUrl({
 			authType: FunctionUrlAuthType.NONE,
