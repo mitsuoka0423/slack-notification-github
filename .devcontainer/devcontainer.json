@@ -12,7 +12,8 @@
 				"qwtel.sqlite-viewer",
 				"usernamehw.errorlens",
 				"YoavBls.pretty-ts-errors",
-				"bierner.markdown-mermaid"
+				"bierner.markdown-mermaid",
+				"wayou.vscode-todo-highlight"
 			],
 			"settings": {
 				"[json]": {
