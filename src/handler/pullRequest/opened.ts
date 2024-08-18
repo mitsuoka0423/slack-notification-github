@@ -5,7 +5,7 @@ import { set } from '../../db/reviewTable';
 export const handle: HandlerFunction<'pull_request.opened', unknown> = async ({
 	payload,
 }) => {
-	console.info('[START]octokitWebhooks.on(pull_request.opened)');
+	console.info('[START]handler.pullRequest.opened');
 	console.debug({ payload: JSON.stringify(payload, null, 2) });
 
 	const response = await postToReviewChannel({
@@ -13,7 +13,7 @@ export const handle: HandlerFunction<'pull_request.opened', unknown> = async ({
 @{メンション}
 レビューお願いします！
 
-・URL: ${payload.pull_request.html_url}
+${payload.pull_request.html_url}
 `,
 	});
 
@@ -36,5 +36,5 @@ export const handle: HandlerFunction<'pull_request.opened', unknown> = async ({
 		});
 	}
 
-	console.info('[END]octokitWebhooks.on(pull_request.opened)');
+	console.info('[END]handler.pullRequest.opened');
 };

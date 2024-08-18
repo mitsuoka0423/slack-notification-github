@@ -7,14 +7,19 @@ import {
 } from './api/slackApp';
 import { init as initReviewTable } from './db/reviewTable';
 import { ENV } from './env';
-import { handle as handlePullRequestOpened } from './handler/pullRequest/opened';
 import { handle as handlePullRequestClosed } from './handler/pullRequest/closed';
+import { handle as handlePullRequestOpened } from './handler/pullRequest/opened';
+import { handle as handlePullRequestReopened } from './handler/pullRequest/reopened';
+import { handle as handlePullRequestReview } from './handler/pullRequestReview';
 
 const secret = ENV.GITHUB_APP_WEBHOOK_SECRET;
 const reviewChannel = ENV.SLACK_API_REVIEW_CHANNEL;
 const debugChannel = ENV.SLACK_API_DEBUG_CHANNEL;
 const botToken = ENV.SLACK_API_BOT_TOKEN;
 const signingSecret = ENV.SLACK_API_SIGNING_SECRET;
+const reactionApprove = ENV.SLACK_API_REACTION_APPROVE;
+const reactionMerge = ENV.SLACK_API_REACTION_MERGE;
+const reactionClose = ENV.SLACK_API_REACTION_CLOSE;
 
 const octokitWebhooks = new OctokitWebhooks({
 	secret,
@@ -26,7 +31,16 @@ initSlackApp({
 	_signingSecret: signingSecret,
 	_reviewChannel: reviewChannel,
 	_debugChannel: debugChannel,
+	_reactionApprove: reactionApprove,
+	_reactionMerge: reactionMerge,
+	_reactionClose: reactionClose,
 });
+
+// NOTE: イベントハンドラーを作って登録する
+octokitWebhooks.on('pull_request.opened', handlePullRequestOpened);
+octokitWebhooks.on('pull_request.closed', handlePullRequestClosed);
+octokitWebhooks.on('pull_request.reopened', handlePullRequestReopened);
+octokitWebhooks.on('pull_request_review', handlePullRequestReview);
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 	console.info('[START]index.handler');
@@ -56,9 +70,6 @@ ${JSON.stringify(JSON.parse(event.body || '{}'), null, 2)}
 			};
 		}
 
-		octokitWebhooks.on('pull_request.opened', handlePullRequestOpened);
-		octokitWebhooks.on('pull_request.closed', handlePullRequestClosed);
-
 		const id = xGitHubDelivery;
 		// FIXME: 誰か型を当ててくれ
 		const name = xGitHubEvent as any;
@@ -79,7 +90,7 @@ ${JSON.stringify(JSON.parse(event.body || '{}'), null, 2)}
 				payload,
 			});
 		} catch (error) {
-			console.warn('署名検証に失敗しました');
+			// console.warn('署名検証に失敗しました');
 			console.warn(error);
 
 			return {
