@@ -1,30 +1,38 @@
 import { Webhooks as OctokitWebhooks } from '@octokit/webhooks';
-import { App as SlackApp } from '@slack/bolt';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
-import { init, set } from './reviewTable';
+import {
+	init as initSlackApp,
+	postToDebugChannel,
+	postToReviewChannel,
+} from './api/slackApp';
+import { init as initReviewTable, set } from './db/reviewTable';
+import { ENV } from './env';
+import { handle } from './handler/pullRequest/opened';
 
-const secret = process.env.GITHUB_APP_WEBHOOK_SECRET || '';
-const reviewChannel = process.env.SLACK_API_REVIEW_CHANNEL || '';
-const debugChannel = process.env.SLACK_API_DEBUG_CHANNEL || '';
+const secret = ENV.GITHUB_APP_WEBHOOK_SECRET;
+const reviewChannel = ENV.SLACK_API_REVIEW_CHANNEL;
+const debugChannel = ENV.SLACK_API_DEBUG_CHANNEL;
+const botToken = ENV.SLACK_API_BOT_TOKEN;
+const signingSecret = ENV.SLACK_API_SIGNING_SECRET;
 
 const octokitWebhooks = new OctokitWebhooks({
 	secret,
 });
 
-const slackApp = new SlackApp({
-	token: process.env.SLACK_API_BOT_TOKEN || '',
-	signingSecret: process.env.SLACK_API_SIGNING_SECRET || '',
+initReviewTable();
+initSlackApp({
+	_token: botToken,
+	_signingSecret: signingSecret,
+	_reviewChannel: reviewChannel,
+	_debugChannel: debugChannel,
 });
-
-init();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 	console.info('[START]index.handler');
 	console.debug(JSON.stringify(event, null, 2));
 
 	// デバッグ用
-	await slackApp.client.chat.postMessage({
-		channel: debugChannel,
+	await postToDebugChannel({
 		text: `
 Webhookイベントを受信しました
 
@@ -46,6 +54,8 @@ ${JSON.stringify(JSON.parse(event.body || '{}'), null, 2)}
 				body: JSON.stringify({ error: 'Bad Request' }),
 			};
 		}
+
+		octokitWebhooks.on('pull_request.opened', handle);
 
 		const id = xGitHubDelivery;
 		// FIXME: 誰か型を当ててくれ
@@ -76,42 +86,6 @@ ${JSON.stringify(JSON.parse(event.body || '{}'), null, 2)}
 			};
 		}
 
-		octokitWebhooks.on('pull_request.opened', async ({ payload }) => {
-			console.info('[START]octokitWebhooks.on(pull_request.opened)');
-			console.debug({ payload: JSON.stringify(payload, null, 2) });
-
-			const response = await slackApp.client.chat.postMessage({
-				channel: reviewChannel,
-				text: `
-@{メンション}
-レビューお願いします！
-
-・URL: ${payload.pull_request.html_url}
-`,
-			});
-
-			if (response.ok) {
-				const { ts, channel } = response;
-
-				if (!ts || !channel) {
-					throw new Error(
-						`Channel IDまたはTSが見つかりません(Channel ID: ${channel}, TS: ${ts})`,
-					);
-				}
-
-				await set({
-					prUrl: payload.pull_request.html_url,
-					updatedAt: payload.pull_request.updated_at,
-					slackThread: {
-						channelId: channel,
-						ts,
-					},
-				});
-			}
-
-			console.info('[END]octokitWebhooks.on(pull_request.opened)');
-		});
-
 		console.info('[END]index.handler');
 
 		return {
@@ -122,8 +96,7 @@ ${JSON.stringify(JSON.parse(event.body || '{}'), null, 2)}
 		console.error('エラーが発生しました');
 		console.error('Error:', error);
 
-		await slackApp.client.chat.postMessage({
-			channel: debugChannel,
+		await postToReviewChannel({
 			text: `
 エラーが発生しました
 
