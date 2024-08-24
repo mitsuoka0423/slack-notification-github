@@ -17,6 +17,20 @@
 
 - [x] (デバッグ)GitHub AppのWebhookイベント受信時に指定したSlackチャンネルにJSONを投稿する
 
+## デプロイ
+
+### 初回のデプロイ時のみ
+
+```bash
+npm run cdk bootstrap
+```
+
+### デプロイ時毎回
+
+```bash
+npm run deploy
+```
+
 ## 構成
 
 ```mermaid
